@@ -1,7 +1,7 @@
 import pytest
 
 from app.data.seed import seed
-from app.tools.account import find_plans, get_my_account, get_outages, get_roaming_rate
+from app.tools.account import find_plans, get_my_account, get_outages, get_roaming_rate, list_customers
 
 
 @pytest.fixture
@@ -43,4 +43,30 @@ def test_unknown_zone_returns_error(db):
 
 def test_outages_case_insensitive_ongoing_first(db):
     assert get_outages(" uppsala ", db_path=db)[0]["status"] == "ongoing"
-    assert get_outages("Stockholm", db_path=db) == []
+    assert get_outages("Västerås", db_path=db) == []
+
+
+def test_list_customers_has_all_demo_customers(db):
+    customers = list_customers(db_path=db)
+    assert [c["id"] for c in customers] == ["C-1001", "C-1002", "C-1003", "C-1004", "C-1005"]
+    assert customers[2] == {"id": "C-1003", "name": "Johan Demo", "area": "Stockholm", "plan_name": "World 150 GB"}
+
+
+def test_customer_with_allowance_used_up(db):
+    assert get_my_account("C-1005", db_path=db)["data_left_this_month_gb"] == 0
+
+
+def test_zone_5_has_rate_and_passes_but_no_plan(db):
+    rate = get_roaming_rate(5, db_path=db)
+    assert rate["price_per_gb_sek"] == 179.0
+    assert [p["id"] for p in rate["travel_passes"]] == ["z5-7d", "z5-15d"]
+    assert find_plans(zone=5, db_path=db) == []
+
+
+def test_unknown_zone_error_names_valid_range(db):
+    assert get_roaming_rate(9, db_path=db)["error"].endswith("Valid zones are 1-5.")
+
+
+def test_outages_ordered_ongoing_planned_resolved(db):
+    statuses = [o["status"] for o in get_outages("Göteborg", db_path=db) + get_outages("Stockholm", db_path=db)]
+    assert statuses == ["ongoing", "planned"]
