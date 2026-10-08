@@ -313,17 +313,16 @@ The LLM-driven paths were checked by running the example questions end to end (C
 
 ## What I would improve with more time
 
-- **Build a stronger test and evaluation suite** since the current test and evaluation was written by Claude (with instructions from me), which did catch some faults and errors in the system. However AI agents has a tendency to write tests and evaluation which is biased towards the code/system, so an overhaul and extension of it would be necessary to remove bias.
+- **Build a stronger test and evaluation suite**, since the current tests and evaluation were written by Claude (with instructions from me). They did catch some faults and errors in the system. However, AI agents have a tendency to write tests and evaluations that are biased towards the code/system, so an overhaul and extension would be necessary to remove that bias.
 
-- **Replace verifier agent with a stronger model** since the same model used for the analyst and support agent will make the same mistake, so using a different more capable is more likely to not do the same mistakes and catch the faulty things.
+- **Replace the verifier agent with a stronger model**, since the same model used for the analyst and support agent will make the same mistakes. A different, more capable model is less likely to make the same mistakes and more likely to catch the faulty ones. This happened during testing, where the analyst picked the wrong option and the verifier passed it.
 
-- **Move more checks into code** Zone claims can be matched against a zone table, and plan claims against the database
+- **Move more checks into code**, for example matching zone claims against a zone table and plan claims against the database. A decision made in code doesn't need the LLM to verify it.
 
-- **Use TypeSafe AI (JEV) as router:** The routers decisions are merely classifications, and JEV is faster and cheaper than a standard LLM on that front, which could improve speed significantly.
+- **Use TypeSafe AI (Jev) as the router, and perhaps for verification:** Jev returns typed judgments with probabilities instead of generated text. As the router, a choice between the six categories would give a confidence per category, and low confidence could trigger a clarifying question. As the verifier, it could give a true/false judgment per claim with a probability, and uncertain claims could be retried. It could also be used to evaluate retrieval. I kept it out so that only one API key is needed, and because it is a very new, untested model released barely a month ago.
 
-- **Implement hybrid search and retrieval evaluation for RAG** to Improve RAG, with increase in Data. Although for this limited amount of data is not necessary.
+- **Implement hybrid search, a reranker and retrieval evaluation for RAG** to improve RAG as the amount of data increases. During testing, the relevance cutoff sat in a narrow gap: the least similar relevant result scored 0.71 and the closest off-topic result scored 0.78, with only 6 documents. An increase in data will therefore probably result in more false "nothing found" results.
 
-- **Use a paid thier/higher rate limit** The biggest reason for slow answers is the 15 requests/minute limit on the free tier of Gemini 3.5 Flash Lite model, and only 5 requests/minute on Gemini 3.8 Flash.
+- **Use a paid tier/higher rate limit:** the biggest reason for slow answers is the 15 requests/minute limit on the free tier of the Gemini 3.5 Flash Lite model, and the limit is only 5 requests/minute on Gemini 3.8 Flash.
 
-- **Observability with LangSmith** to trace everything, and store said traces.
-
+- **Observability with LangSmith** to trace everything and store the traces. The current version only shows the trace in the UI for one request, and it is lost afterwards.
