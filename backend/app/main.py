@@ -13,7 +13,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 from langchain_google_genai.chat_models import GoogleRateLimitError
@@ -24,6 +24,7 @@ from app.data.seed import seed
 from app.graph import RECURSION_LIMIT, build_graph
 from app.rag.ingest import ingest
 from app.rag.store import get_collection
+from app.tools.account import list_customers
 
 log = logging.getLogger("telecom")
 
@@ -53,6 +54,8 @@ app = FastAPI(title="Martins Mobile support assistant", lifespan=lifespan)
 
 class ChatRequest(BaseModel):
     thread_id: str = Field(min_length=1, max_length=100)
+    # Simulated login: trusted from the browser as a stand-in for an authenticated session.
+    customer_id: str = Field(min_length=1, max_length=20)
     message: str = Field(min_length=1, max_length=2000)
 
 
@@ -71,12 +74,17 @@ def _truncate(value):
     return value
 
 
-async def stream_turn(graph, thread_id: str, message: str):
-    config = {"configurable": {"thread_id": thread_id}, "recursion_limit": RECURSION_LIMIT}
+def _config(thread_id: str) -> dict:
+    return {"configurable": {"thread_id": thread_id}, "recursion_limit": RECURSION_LIMIT}
+
+
+async def stream_turn(graph, thread_id: str, customer_id: str, message: str):
+    config = _config(thread_id)
+    inputs = {"messages": [HumanMessage(message)], "customer_id": customer_id}
     answer = None
     try:
         async with asyncio.timeout(TURN_TIMEOUT_SECONDS):
-            async for update in graph.astream({"messages": [HumanMessage(message)]}, config,
+            async for update in graph.astream(inputs, config,
                                               stream_mode="updates"):
                 for node, values in update.items():
                     values = values or {}
@@ -98,10 +106,22 @@ async def stream_turn(graph, thread_id: str, message: str):
     yield _sse("done", {})
 
 
+@app.get("/api/customers")
+async def customers():
+    return list_customers()
+
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
+    if request.customer_id not in {c["id"] for c in list_customers()}:
+        raise HTTPException(422, "Unknown customer")
+    # A conversation belongs to one customer: its history must never be shown to another.
+    state = await app.state.graph.aget_state(_config(request.thread_id))
+    owner = (state.values or {}).get("customer_id")
+    if owner and owner != request.customer_id:
+        raise HTTPException(409, "This conversation belongs to another customer. Start a new chat.")
     return StreamingResponse(
-        stream_turn(app.state.graph, request.thread_id, request.message),
+        stream_turn(app.state.graph, request.thread_id, request.customer_id, request.message),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

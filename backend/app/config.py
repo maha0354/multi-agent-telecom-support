@@ -18,6 +18,6 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 # Stay just under the free-tier quota; raise it on a paid key.
 GEMINI_REQUESTS_PER_MINUTE = float(os.getenv("GEMINI_REQUESTS_PER_MINUTE", "14"))
 
-# The single simulated logged-in customer. Code injects this into graph state;
-# the LLM never chooses whose account is queried.
-DEMO_CUSTOMER_ID = "C-1001"
+# Customer used when a caller (e.g. the CLI) does not pick one. The API requires an explicit
+# customer; either way code puts it into graph state and the LLM never chooses it.
+DEFAULT_CUSTOMER_ID = "C-1001"

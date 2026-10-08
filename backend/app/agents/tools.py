@@ -29,16 +29,16 @@ class NoArgs(BaseModel):
 
 
 class FindPlansArgs(BaseModel):
-    zone: int | None = Field(None, description="Only plans that include this roaming zone (1-4)")
+    zone: int | None = Field(None, description="Only plans that include this roaming zone (1-5)")
     min_data_gb: int | None = Field(None, description="Only plans with at least this much monthly data")
 
 
 class RoamingRateArgs(BaseModel):
-    zone: int = Field(description="Roaming zone number 1-4")
+    zone: int = Field(description="Roaming zone number 1-5")
 
 
 class CompareTripArgs(BaseModel):
-    zone: int = Field(description="Roaming zone number 1-4 of the destination")
+    zone: int = Field(description="Roaming zone number 1-5 of the destination")
     days: int = Field(description="Trip length in days")
     gb_per_day: float | None = Field(
         None, description="Only if the customer stated their own data use; otherwise omit")
