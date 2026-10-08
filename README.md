@@ -31,13 +31,14 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 and click one of the example questions.
+Open http://localhost:5173, pick a simulated customer in the top right, and click one of the
+example questions.
 
 **Other commands** (from `backend/`):
 
 | Command | What it does |
 |---|---|
-| `uv run python -m app.cli -v "question" ["follow-up"]` | Run questions in the terminal and print the trace |
+| `uv run python -m app.cli -v --customer C-1003 "question" ["follow-up"]` | Run questions in the terminal as a given customer and print the trace |
 | `uv run python -m app.data.seed` | Recreate the database |
 | `uv run python -m app.rag.ingest` | Re-index the documents |
 
@@ -176,7 +177,7 @@ that order.
 
 **Knowledge base (RAG).** Six markdown documents (`backend/data/docs/`: roaming, plans, billing,
 refunds, troubleshooting, customer service) are split into **one chunk per heading section**,
-32 chunks in total.
+33 chunks in total.
 - Each chunk keeps its source file, heading path and a stable ID as metadata.
 - The heading path is prepended to the text before embedding, so a section titled "Zone 4" is
   embedded as "Roaming > Zone 4: Asia-Pacific …".
@@ -184,7 +185,9 @@ refunds, troubleshooting, customer service) are split into **one chunk per headi
 - Search returns the top 4 chunks within a cosine-distance cutoff of 0.75. If nothing passes, the
   support agent reports `no_relevant_info`, which can trigger a re-plan. The cutoff was measured,
   not guessed: relevant hits reached 0.71 ("my internet is not working"), and the closest
-  off-topic hit was 0.78 ("capital of France").
+  off-topic hit was 0.78 ("capital of France"). Re-measured after adding Zone 5: "Which zone is
+  Brazil in?" finds the new section at 0.30, and a new off-topic probe ("best football team in
+  Argentina?") scores 0.81 and is filtered out.
 
 **Structured data.** Fixed query functions, never free-form SQL written by the LLM.
 
@@ -248,10 +251,24 @@ customer's message). On a mismatch the reply is regenerated once. If it still fa
 claims themselves become the reply. Because of this check, all arithmetic must happen in tools:
 the responder isn't allowed to compute totals or differences.
 
-**Customer identity is set by code.** One simulated logged-in customer (Alex Demo, plan Plus 30 GB,
-zones 1–2) is loaded into state by code on every request. Account tools take no customer
-argument; they read the ID from state. The LLM can't query anyone else's account, even if a
-message asks it to. In production this would come from an authenticated session.
+**Customer identity is set by code.** The UI simulates a login: you pick one of five demo
+customers, and the frontend sends that `customer_id` with each message.
+- **Validated by the API:** an unknown customer is rejected (422).
+- **Loaded into state by code:** `load_context` loads the account. Account tools take no customer
+  argument; they read the ID from state, so the LLM can't query anyone else's account, even if a
+  message asks it to.
+- **One customer per conversation:** switching customer in the UI starts a new chat. The API
+  enforces this too: a message for a conversation that belongs to another customer is rejected
+  (409), so history never crosses customers.
+- In production the customer would come from an authenticated session instead of the browser.
+
+| Customer | Plan (zones) | Area | Data used / typical per month | Try |
+|---|---|---|---|---|
+| Alex Demo (C-1001) | Plus 30 GB (1–2) | Uppsala | 12.4 / 18 GB | Japan trip comparison; ongoing outage |
+| Sara Demo (C-1002) | Bas 10 GB (1) | Malmö | 9.6 / 11 GB | Almost out of data; even Zone 2 costs extra |
+| Johan Demo (C-1003) | World 150 GB (1–4) | Stockholm | 40 / 60 GB | Japan already included; planned maintenance |
+| Lina Demo (C-1004) | Max 100 GB (1–3) | Kiruna | 30 / 45 GB | USA included, Thailand not; 5G outage |
+| Omar Demo (C-1005) | Bas 10 GB (1) | Göteborg | 10 / 8 GB | Allowance used up; ongoing outage |
 
 **Conversation state.** LangGraph's `MemorySaver`, keyed by a `thread_id` that the frontend
 generates. Only the message history carries over between turns, so follow-ups like "and what
@@ -272,6 +289,8 @@ every turn, so old evidence can't leak into a new answer unverified.
 
 ## Example questions
 
+Logged in as Alex Demo unless stated otherwise.
+
 | Demonstrates | Question | Expected path |
 |---|---|---|
 | RAG | "What's the fair-use policy when roaming in the EU?" | policy → support → verifier → responder |
@@ -280,27 +299,34 @@ every turn, so old evidence can't leak into a new answer unverified.
 | Tool use + troubleshooting | "My mobile data is really slow at home today, what's going on?" | troubleshooting → support (`get_outages` finds the Uppsala outage) |
 | **Multi-agent** | "I'm going to Japan for 10 days next month. What would roaming cost me on my current plan, in euros, and is there a cheaper option?" | both → support (Japan = Zone 4) → analyst (`compare_roaming_options`, `convert_currency`) → verifier → responder. Answer: pay-as-you-go 774 SEK; cheapest is upgrading to World for a month, +300 SEK |
 | Follow-up (conversation state) | then: "And what about Thailand for 5 days?" | both → … cheapest is the 7-day Travel Pass, 249 SEK |
+| Zone 5, passes only | "What's the cheapest way to use data in Brazil for a week?" | both → support (Brazil = Zone 5) → analyst. Cheapest: the 7-day pass plus 1.2 GB pay-as-you-go, 513.8 SEK |
+| Different customer | As Johan Demo: "I'm going to Japan for 10 days. What will roaming cost me?" | both → … Zone 4 is included in World: 0 SEK |
+| Different customer | As Omar Demo: "How much data do I have left this month?" | account → analyst: 0 GB of 10 GB |
 | Clarification | "It doesn't work" (in a new chat) | unclear → one clarifying question |
 | Out of scope | "Write me a poem about cats" | out_of_scope → refusal, 1 LLM call |
 
 ## Testing
 
-`uv run pytest` runs 57 tests without calling the LLM:
+`uv run pytest` runs 69 tests without calling the LLM:
 - **Calculator:** results, and rejection of code injection and exponent bombs.
 - **Currency:** a mocked HTTP layer, including outage, timeout and unknown-currency cases.
-- **Account queries:** run against a temporary database.
+- **Account queries:** run against a temporary database, including every demo customer and Zone 5.
 - **Trip cost comparison.**
 - **Chunking.**
 - **Step check:** the routing decisions.
 - **Numbers check:** e.g. the responder computing 774 − 399 by itself gets caught.
-- **API:** event order, truncation, rate-limit and timeout handling, using a fake graph.
+- **API:** event order, truncation, rate-limit and timeout handling, unknown customers, and a
+  conversation that tries to switch customer, using a fake graph.
 
 The LLM-driven paths were checked by running the example questions end to end (CLI and browser).
 
 ## Known limitations
 
-- **Retry and re-plan paths:** these have only been exercised by unit tests. In the live example
-  runs every claim passed verification, so neither path ran.
+- **Retry and re-plan paths:** the retry path has run live once (the Verifier failed a support
+  claim for Johan's Japan question, and the retried claim passed). The re-plan path has only
+  been exercised by unit tests.
+- **Simulated login:** the selected customer is trusted from the browser, a stand-in for real
+  authentication.
 - **Restart:** state is in memory. After a backend restart the UI still shows old messages, but
   the backend has no history for that thread.
 - **Simplifications in the trip comparison:** the Zone 4 fair-use limit (20 GB/month) is not
