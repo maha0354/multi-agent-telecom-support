@@ -20,7 +20,7 @@ from app.agents.router import router_node
 from app.agents.support import support_node
 from app.agents.verifier import verifier_node
 from app.checks import MAX_NUMBER_RETRIES, next_after_agent, unsupported_numbers
-from app.config import DEMO_CUSTOMER_ID
+from app.config import DEFAULT_CUSTOMER_ID
 from app.state import GraphState, fresh_turn
 from app.tools.account import get_my_account
 
@@ -33,13 +33,19 @@ REFUSAL = ("I can only help with Martins Mobile questions: plans, roaming, billi
 
 
 def load_context(state: GraphState) -> dict:
-    """Reset per-turn fields and inject the logged-in customer. Runs in code, never the LLM."""
-    account = get_my_account(DEMO_CUSTOMER_ID)
+    """Reset per-turn fields and load the logged-in customer. Runs in code, never the LLM.
+
+    The caller (API or CLI) puts customer_id into the graph input after validating it."""
+    customer_id = state.get("customer_id") or DEFAULT_CUSTOMER_ID
+    account = get_my_account(customer_id)
+    if "error" in account:
+        raise ValueError(f"Unknown customer {customer_id}")
     return {
         **fresh_turn(state["messages"][-1].text),
-        "customer_id": DEMO_CUSTOMER_ID,
-        "customer_area": account.get("area", ""),
-        "step": {"node": "load_context", "summary": f"customer {DEMO_CUSTOMER_ID} ({account.get('plan_name')})",
+        "customer_id": customer_id,
+        "customer_area": account["area"],
+        "step": {"node": "load_context",
+                 "summary": f"customer {customer_id} {account['name']} ({account['plan_name']})",
                  "detail": {}},
     }
 

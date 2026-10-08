@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from types import SimpleNamespace
 
 import pytest
 from langchain_google_genai.chat_models import GoogleRateLimitError
@@ -10,11 +11,15 @@ import app.main as main
 
 
 class FakeGraph:
-    def __init__(self, updates=None, error=None, delay=0.0):
-        self.updates, self.error, self.delay = updates or [], error, delay
+    def __init__(self, updates=None, error=None, delay=0.0, owner=None):
+        self.updates, self.error, self.delay, self.owner = updates or [], error, delay, owner
+
+    async def aget_state(self, config):
+        return SimpleNamespace(values={"customer_id": self.owner} if self.owner else {})
 
     async def astream(self, inputs, config, stream_mode):
         assert config["configurable"]["thread_id"] == "t-1"
+        assert inputs["customer_id"] == "C-1001"  # code passes the selected customer into state
         for update in self.updates:
             await asyncio.sleep(self.delay)
             yield update
@@ -24,7 +29,7 @@ class FakeGraph:
 
 def run(graph) -> list[tuple[str, dict]]:
     async def collect():
-        return [chunk async for chunk in main.stream_turn(graph, "t-1", "hello")]
+        return [chunk async for chunk in main.stream_turn(graph, "t-1", "C-1001", "hello")]
 
     events = []
     for chunk in asyncio.run(collect()):
@@ -65,9 +70,42 @@ def test_timeout_emits_error(monkeypatch):
     assert [e for e, _ in events] == ["error", "done"]
 
 
-@pytest.mark.parametrize("body", [{"thread_id": "t", "message": ""}, {"thread_id": "", "message": "hi"}])
-def test_invalid_request_rejected(body):
+CUSTOMERS = [{"id": "C-1001", "name": "Alex Demo", "area": "Uppsala", "plan_name": "Plus 30 GB"},
+             {"id": "C-1002", "name": "Sara Demo", "area": "Malmö", "plan_name": "Bas 10 GB"}]
+
+
+@pytest.fixture
+def client(monkeypatch):
     from fastapi.testclient import TestClient
+    monkeypatch.setattr(main, "list_customers", lambda: CUSTOMERS)
     main.app.state.graph = FakeGraph()
-    client = TestClient(main.app)  # no lifespan: startup data checks are not run
-    assert client.post("/api/chat", json=body).status_code == 422
+    return TestClient(main.app)  # no lifespan: startup data checks are not run
+
+
+def chat(client, **overrides):
+    body = {"thread_id": "t-1", "customer_id": "C-1001", "message": "hi", **overrides}
+    return client.post("/api/chat", json=body)
+
+
+@pytest.mark.parametrize("overrides", [{"message": ""}, {"thread_id": ""}, {"customer_id": ""}])
+def test_invalid_request_rejected(client, overrides):
+    assert chat(client, **overrides).status_code == 422
+
+
+def test_unknown_customer_rejected(client):
+    assert chat(client, customer_id="C-9999").status_code == 422
+
+
+def test_conversation_cannot_switch_customer(client):
+    main.app.state.graph = FakeGraph(owner="C-1002")
+    response = chat(client, customer_id="C-1001")
+    assert response.status_code == 409
+
+
+def test_conversation_continues_for_same_customer(client):
+    main.app.state.graph = FakeGraph([{"numbers_check": {"answer": "Hi!"}}], owner="C-1001")
+    assert "event: answer" in chat(client).text
+
+
+def test_customers_endpoint(client):
+    assert [c["id"] for c in client.get("/api/customers").json()] == ["C-1001", "C-1002"]

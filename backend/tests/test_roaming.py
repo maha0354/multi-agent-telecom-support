@@ -43,3 +43,15 @@ def test_zone_already_included_costs_nothing(db):
 @pytest.mark.parametrize("zone, days", [(9, 10), (4, 0)])
 def test_invalid_input_returns_error(db, zone, days):
     assert "error" in compare_roaming_options("C-1001", zone=zone, days=days, db_path=db)
+
+
+def test_zone_already_in_plan_for_world_customer(db):
+    result = compare_roaming_options("C-1003", zone=4, days=10, db_path=db)
+    assert result["cheapest_option"]["type"] == "included"
+
+
+def test_zone_5_has_no_plan_upgrade_option(db):
+    result = compare_roaming_options("C-1001", zone=5, days=7, db_path=db)
+    assert {o["type"] for o in result["options"]} == {"pay_as_you_go", "travel_pass"}
+    # 18 GB/month -> 4.2 GB in 7 days: the 3 GB pass needs 1.2 GB pay-as-you-go on top.
+    assert costs(result)["Travel Pass South America & Africa 7 days"] == round(299 + 1.2 * 179, 2)

@@ -19,6 +19,16 @@ def _plan_dict(row: sqlite3.Row) -> dict:
     return plan
 
 
+def list_customers(db_path: Path = DB_PATH) -> list[dict]:
+    """Demo customers for the simulated login picker. Never exposed to the LLM."""
+    with closing(_connect(db_path)) as conn:
+        rows = conn.execute(
+            """SELECT c.id, c.name, c.area, p.name AS plan_name
+               FROM customers c JOIN plans p ON p.id = c.plan_id ORDER BY c.id"""
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_my_account(customer_id: str, db_path: Path = DB_PATH) -> dict:
     """Account and plan for the logged-in customer. customer_id comes from graph state, not the LLM."""
     with closing(_connect(db_path)) as conn:
@@ -54,8 +64,9 @@ def get_roaming_rate(zone: int, db_path: Path = DB_PATH) -> dict:
             "SELECT id, name, data_gb, days, price_sek FROM travel_passes WHERE zone = ? ORDER BY price_sek",
             (zone,),
         ).fetchall()
+        zones = [r[0] for r in conn.execute("SELECT zone FROM roaming_rates ORDER BY zone")]
     if rate is None:
-        return {"error": f"Unknown roaming zone {zone}. Valid zones are 1-4."}
+        return {"error": f"Unknown roaming zone {zone}. Valid zones are {zones[0]}-{zones[-1]}."}
     return {**dict(rate), "travel_passes": [dict(p) for p in passes]}
 
 
@@ -63,7 +74,8 @@ def get_outages(area: str, db_path: Path = DB_PATH) -> list[dict]:
     """Known outages for an area (case-insensitive), ongoing first."""
     with closing(_connect(db_path)) as conn:
         rows = conn.execute(
-            "SELECT * FROM outages WHERE lower(area) = lower(?) ORDER BY status = 'resolved', started_at DESC",
+            """SELECT * FROM outages WHERE lower(area) = lower(?)
+               ORDER BY CASE status WHEN 'ongoing' THEN 0 WHEN 'planned' THEN 1 ELSE 2 END, started_at DESC""",
             (area.strip(),),
         ).fetchall()
     return [dict(r) for r in rows]

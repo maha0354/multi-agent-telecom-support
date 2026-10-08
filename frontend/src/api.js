@@ -3,7 +3,14 @@
 
 const CLIENT_TIMEOUT_MS = 180_000; // the backend gives up at 150 s; this is a last resort
 
-export async function streamChat({ threadId, message, onStep, onAnswer, onError }) {
+// Demo customers for the simulated login picker.
+export async function fetchCustomers() {
+  const response = await fetch("/api/customers");
+  if (!response.ok) throw new Error(`Server responded ${response.status}`);
+  return response.json();
+}
+
+export async function streamChat({ threadId, customerId, message, onStep, onAnswer, onError }) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS);
   let finished = false;
@@ -19,10 +26,13 @@ export async function streamChat({ threadId, message, onStep, onAnswer, onError 
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ thread_id: threadId, message }),
+      body: JSON.stringify({ thread_id: threadId, customer_id: customerId, message }),
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`Server responded ${response.status}`);
+    if (!response.ok) {
+      const detail = await response.json().then((b) => b.detail, () => null);
+      throw new Error(typeof detail === "string" ? detail : `Server responded ${response.status}`);
+    }
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = "";

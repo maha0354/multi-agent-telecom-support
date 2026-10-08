@@ -52,6 +52,23 @@ header {
   border-bottom: 1px solid var(--border);
 }
 h1 { font-size: 1.2rem; margin: 0; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+select {
+  font: inherit;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 header p { margin: 2px 0 0; font-size: 0.85rem; }
 
 main { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 12px; }
