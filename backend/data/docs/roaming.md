@@ -50,9 +50,17 @@ pay-as-you-go rate. Without Zone 4 in the plan, data is charged at the Zone 4 pa
 rate or covered by a Zone 4 Travel Pass. Some networks in China restrict certain services
 (for example Google services) regardless of plan.
 
+## Zone 5: South America and Africa
+
+Countries: Brazil, Argentina, Chile, Colombia, South Africa, Egypt, Morocco and Kenya.
+
+Conditions: Zone 5 is not included in any plan. Data is always charged at the Zone 5
+pay-as-you-go rate or covered by a Zone 5 Travel Pass. Coverage outside major cities can be
+limited, and some partner networks only offer 4G.
+
 ## Countries outside all zones
 
-Countries not listed in Zones 1 to 4 are not covered by Martins Mobile roaming agreements. Data may
+Countries not listed in Zones 1 to 5 are not covered by Martins Mobile roaming agreements. Data may
 not work at all there. Use local Wi-Fi or a local SIM card.
 
 ## Travel Pass add-ons
