@@ -1,0 +1,13 @@
+.venv/
+Assignment.md
+PROJECT_SCOPE.md
+PROGRESS.md
+.env
+.vibe-wise/
+telecom.md
+chroma/
+.pytest_cache/
+__pycache__
+frontend/node_modules/
+frontend/dist/
+backend/data/telecom.db
