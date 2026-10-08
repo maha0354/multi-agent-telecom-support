@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { streamChat } from "./api.js";
+import { fetchCustomers, streamChat } from "./api.js";
 import Trace from "./Trace.jsx";
 
 const EXAMPLES = [
@@ -7,6 +7,7 @@ const EXAMPLES = [
   "How much data do I have left this month?",
   "I'm going to Japan for 10 days next month. What would roaming cost me on my current plan, in euros, and is there a cheaper option?",
   "My mobile data is really slow at home today, what's going on?",
+  "What's the cheapest way to use data in Brazil for a week?",
 ];
 
 export default function App() {
@@ -15,7 +16,20 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
+  // Simulated login: the selected demo customer is sent with every message.
+  const [customers, setCustomers] = useState([]);
+  const [customerId, setCustomerId] = useState("");
+  const [loadError, setLoadError] = useState(null);
   const bottomRef = useRef(null);
+
+  useEffect(() => {
+    fetchCustomers()
+      .then((list) => {
+        setCustomers(list);
+        setCustomerId(list[0]?.id ?? "");
+      })
+      .catch((err) => setLoadError(`Could not load customers: ${err.message}`));
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -25,7 +39,7 @@ export default function App() {
 
   async function send(text) {
     const message = text.trim();
-    if (!message || running) return;
+    if (!message || running || !customerId) return;
     setInput("");
     setRunning(true);
     setMessages((ms) => [
@@ -35,6 +49,7 @@ export default function App() {
     ]);
     await streamChat({
       threadId,
+      customerId,
       message,
       onStep: (step) => updateLast((m) => ({ ...m, steps: [...m.steps, step] })),
       onAnswer: (answer) => updateLast((m) => ({ ...m, text: answer })),
@@ -48,14 +63,40 @@ export default function App() {
     setMessages([]);
   }
 
+  // A conversation belongs to one customer, so switching customer starts a new chat.
+  function switchCustomer(id) {
+    setCustomerId(id);
+    newChat();
+  }
+
+  const customer = customers.find((c) => c.id === customerId);
+
   return (
     <div className="app">
       <header>
         <div>
           <h1>Martins Support</h1>
-          <p className="muted">Logged in as Alex Demo (simulated) · fictional operator</p>
+          <p className="muted">
+            {customer
+              ? `Logged in as ${customer.name} (simulated) · ${customer.plan_name} · ${customer.area}`
+              : loadError ?? "Loading customers…"}
+          </p>
         </div>
-        <button onClick={newChat} disabled={running}>New chat</button>
+        <div className="header-actions">
+          <label>
+            <span className="visually-hidden">Simulated customer</span>
+            <select
+              value={customerId}
+              onChange={(e) => switchCustomer(e.target.value)}
+              disabled={running || !customers.length}
+            >
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} — {c.plan_name}</option>
+              ))}
+            </select>
+          </label>
+          <button onClick={newChat} disabled={running}>New chat</button>
+        </div>
       </header>
 
       <main>
