@@ -4,7 +4,7 @@ PROJECT_SCOPE.md
 PROGRESS.md
 .env
 .vibe-wise/
-telecom.md
+telecom.db
 chroma/
 .pytest_cache/
 __pycache__
