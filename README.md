@@ -34,6 +34,7 @@ npm run dev
 Open http://localhost:5173, pick a simulated customer in the top right, and click one of the
 example questions.
 
+
 **Other commands** (from `backend/`):
 
 | Command | What it does |
@@ -60,7 +61,7 @@ example questions.
 | RAG | **Chroma** + **all-MiniLM-L6-v2** (local ONNX embeddings) | Runs locally with no second API key, and without PyTorch |
 | Structured data | **SQLite** | Plans, roaming rates, Travel Passes, the customer, outages |
 | Public API | **Frankfurter** (ECB exchange rates) | Currency conversion, no key |
-| Frontend | **React 19 + Vite** | Chat UI with a live, expandable agent trace |
+| Frontend | **React 19 + Vite + TypeScript + Tailwind CSS v4** | Chat UI with a live, expandable agent trace; all colours and fonts are CSS variables in one file |
 
 ## Architecture
 
