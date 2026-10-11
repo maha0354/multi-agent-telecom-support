@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ThinkingOrb } from "thinking-orbs";
 import {
   fetchCustomers,
   streamChat,
@@ -130,8 +130,8 @@ export default function App() {
                   )}
                   {m.error && <div className="text-sm text-destructive">{m.error}</div>}
                   {!m.text && !m.error && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <ThinkingOrb state="solving" size={64} theme="light" />
                       Working…
                     </div>
                   )}
